@@ -21,6 +21,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# C:\Users\tamas\Documents\szakgyak\code\VideoGenerator\pictures2Div
-# C:\Users\tamas\Documents\szakgyak\code\VideoGenerator\img2
