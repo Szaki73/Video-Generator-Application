@@ -20,12 +20,11 @@ import math
 from concurrent.futures import ThreadPoolExecutor
 import time
 import logging
+import re
 
 if getattr(sys, 'frozen', False):
-    # Running as a bundled executable
     base_path = os.path.dirname(sys.executable)
 else:
-    # Running as a script
     base_path = os.path.dirname(os.path.abspath(__file__))
 
 log_file = os.path.join(base_path, "error.txt")
@@ -45,6 +44,7 @@ class GeneratorWindow(QWidget):
         self.input_path = ""
         self.inputs = []
         self.output_path = os.path.join(base_path, "output")
+        os.makedirs(self.output_path, exist_ok=True)
         self.output_name = "output"
         self.row = 3
         self.column = 3
@@ -52,6 +52,8 @@ class GeneratorWindow(QWidget):
         self.framerate = 15
         self.start_frame = 0
         self.end_frame = 0
+        self.camera_grid = []
+        self.camera_positions = {}
         self.camera_order = []
         self.camera_frames = {}
         self.frame_numbers = set()
@@ -156,6 +158,8 @@ class GeneratorWindow(QWidget):
         placeholder = QWidget()
         self.stacked_layout.addWidget(placeholder)
         self.stacked_layout.addWidget(self.grid_view)
+        self.stacked_layout.setCurrentWidget(self.grid_view)
+        self.update_grid()
 
         stacked_frame = QFrame()
         stacked_frame.setLayout(self.stacked_layout)
@@ -210,7 +214,7 @@ class GeneratorWindow(QWidget):
         input_bar.addWidget(self.start_frame_spin, 0, 3)
         input_bar.addWidget(QLabel("End Frame:"), 0, 4)
         input_bar.addWidget(self.end_frame_spin, 0, 5)
-        input_bar.addWidget(QLabel("Frame:"), 0, 6)
+        input_bar.addWidget(QLabel("Global Delay:"), 0, 6)
         input_bar.addWidget(self.global_delay_spin, 0, 7)
         input_bar.addWidget(generate_btn, 0, 8)
 
@@ -225,7 +229,6 @@ class GeneratorWindow(QWidget):
 
         self.image_width = self.grid_scroll.viewport().width()
         self.image_height = self.grid_scroll.viewport().height()
-
         return widget
 
     def update_row(self, value):
@@ -252,18 +255,23 @@ class GeneratorWindow(QWidget):
             return
 
         if not os.path.isdir(input_path):
-            self.error_label.setText(f"Input path does not exist")
+            self.error_label.setText(f"Input Path does not exist")
             self.input_path_entry.setFocus()
             return
 
         if lidar_path and not os.path.isdir(lidar_path):
-            self.error_label.setText(f"Lidar path does not exist")
+            self.error_label.setText(f"Lidar Input Path does not exist")
             self.lidar_path_entry.setFocus()
             return
 
         if not os.path.isdir(output_path):
-            self.error_label.setText(f"Output path does not exist")
+            self.error_label.setText(f"Output Path does not exist")
             self.output_path_entry.setFocus()
+            return
+
+        if not output_name:
+            self.error_label.setText(f"Output Name can not be empty.")
+            self.output_name_entry.setFocus()
             return
 
         self.input_path = input_path
@@ -276,8 +284,7 @@ class GeneratorWindow(QWidget):
 
         self.output_name = output_name
 
-        self.stacked_layout.setCurrentWidget(self.grid_view)
-        self.load_first_frames()
+        self.load_frames()
         self.get_image_sizes()
         self.update_grid()
 
@@ -285,6 +292,8 @@ class GeneratorWindow(QWidget):
         self.stop_generator = True
 
     def update_grid(self):
+        self.camera_grid = []
+        self.camera_positions = {}
         for i in reversed(range(self.grid_layout.count())):
             widget = self.grid_layout.itemAt(i).widget()
             if widget:
@@ -306,6 +315,8 @@ class GeneratorWindow(QWidget):
 
                 if cam_index < len(self.camera_order):
                     cam = self.camera_order[cam_index]
+                    self.camera_grid.append(cam)
+                    self.camera_positions[cam] = (r, c)
                     self.camera_grid.append(cam)
 
                     label = ClickableLabel(cam, controller=self)
@@ -333,18 +344,30 @@ class GeneratorWindow(QWidget):
 
                 self.grid_layout.addWidget(cell_widget, r, c)
 
-    def load_first_frames(self):
+    def load_frames(self):
         self.frame_data.clear()
         self.camera_order.clear()
+
         for inputs in self.inputs:
             image_files = sorted([f for f in os.listdir(inputs)])
             for f in image_files:
                 parts = f.split("_")
                 cam = parts[0]
+
                 fn_part = [p for p in parts if p.startswith("fn")]
+                fn = None
+
                 if fn_part:
                     fn_str = fn_part[0][2:].split(".")[0]
                     fn = int(fn_str)
+                else:
+                    for p in parts:
+                        match = re.search(r"(\d+)", p)
+                        if match:
+                            fn = int(match.group(1))
+                            break
+
+                if fn is not None:
                     self.frame_data.setdefault(cam, {})[fn] = os.path.join(inputs, f)
 
         self.camera_order = list(self.frame_data.keys())
@@ -398,17 +421,24 @@ class GeneratorWindow(QWidget):
         elif self.selected_cam == cam:
             self.selected_cam = None
         else:
+            cam1, cam2 = self.selected_cam, cam
+            pos1 = self.camera_positions[cam1]
+            pos2 = self.camera_positions[cam2]
 
-            i1 = self.camera_grid.index(self.selected_cam)
-            i2 = self.camera_grid.index(cam)
-            self.camera_grid[i1], self.camera_grid[i2] = self.camera_grid[i2], self.camera_grid[i1]
+            w1 = self.image_labels[cam1].parentWidget()
+            w2 = self.image_labels[cam2].parentWidget()
 
-            o1 = self.camera_order.index(self.selected_cam)
-            o2 = self.camera_order.index(cam)
+            self.grid_layout.addWidget(w1, *pos2)
+            self.grid_layout.addWidget(w2, *pos1)
+
+            self.camera_positions[cam1], self.camera_positions[cam2] = pos2, pos1
+
+            o1 = self.camera_order.index(cam1)
+            o2 = self.camera_order.index(cam2)
             self.camera_order[o1], self.camera_order[o2] = self.camera_order[o2], self.camera_order[o1]
 
             self.selected_cam = None
-            self.update_grid()
+
 
     def update_frame(self, cam):
         frame_index = self.delay_vars.get(cam).value() + 1
@@ -511,18 +541,16 @@ class GeneratorWindow(QWidget):
                     canvas[vertical_offset:vertical_offset + scaled_image_height,
                         horizontal_offset:horizontal_offset + scaled_image_width] = resized
 
-            # ✅ Write the full canvas after all rows are drawn
             video.write(canvas)
-
             percent_complete = (index / len(self.frame_numbers)) * 100
             self.error_label.setText(f"Progress: {percent_complete:.2f}% ({index}/{len(self.frame_numbers)})")
             QtWidgets.QApplication.processEvents()
 
         video.release()
         if self.errors:
-            self.error_label.setText("Video finished. Errors in the errors.txt.")
+            self.error_label.setText("Video generated. Errors in the errors.txt.")
         else:
-            self.error_label.setText("Video finished. No errors.")
+            self.error_label.setText("Video generated. No errors.")
 
     def sort_images(self):
         self.camera_order = self.camera_order[:self.row * sum(self.columns[:self.row])]
