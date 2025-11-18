@@ -45,5 +45,4 @@ Note: Global delay changes all delay so after testing with it reset it to 0. Sta
 
 ### GRID
 
-
 This is where we can see the loaded cameras. At start we see 9 empty cells. Each loaded cell will have a Delay spinbox under it. Clicking 2 loaded cells will change the cameras and the delay, this is how we can set the camera position for the video. Example: Let's say we have 2 cameras: cam1 and cam2. We set the delay on cam1 to 5. in the video we will see a frame wehere one of the cameras is on frame: 5 and the other will be on 0.

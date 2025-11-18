@@ -47,7 +47,6 @@ class GeneratorWindow(QWidget):
         os.makedirs(self.output_path, exist_ok=True)
         self.output_name = "output"
         self.row = 3
-        self.column = 3
         self.columns = [3, 3, 3]
         self.framerate = 15
         self.start_frame = 0
@@ -62,7 +61,6 @@ class GeneratorWindow(QWidget):
         self.stop_generator = False
         self.errors = False
 
-        self.camera_grid = []
         self.frame_data = {}
         self.image_width = None
         self.image_height = None
@@ -96,7 +94,7 @@ class GeneratorWindow(QWidget):
         browse_lidar_input_btn.clicked.connect(self.browse_lidar_input)
 
         continue_btn = QPushButton("Continue")
-        continue_btn.clicked.connect(self.show_grid_view)
+        continue_btn.clicked.connect(self.loading_grid_view)
 
         stop_btn = QPushButton("Stop Generator")
         stop_btn.clicked.connect(self.stop_gen)
@@ -236,11 +234,10 @@ class GeneratorWindow(QWidget):
         self.update_grid()
 
     def update_column(self, index, value):
-        self.column = value
         self.columns[index] = value
         self.update_grid()
 
-    def show_grid_view(self):
+    def loading_grid_view(self):
         self.inputs.clear()
         input_path = self.input_path_entry.text().strip()
         lidar_path = self.lidar_path_entry.text().strip()
@@ -303,7 +300,6 @@ class GeneratorWindow(QWidget):
         cell_width = available_width // 3
         cell_height = int(cell_width / self.image_width * self.image_height)
 
-        self.camera_grid = []
         cam_index = 0
 
         for r in range(self.row):
@@ -467,7 +463,6 @@ class GeneratorWindow(QWidget):
             self.stop_generator = False
         if self.errors == True:
             self.errors = False
-        self.camera_order = self.camera_order[:self.row * self.column]
         if self.start_frame != 0 and self.end_frame != 0 and self.start_frame >= self.end_frame:
             self.error_label.setText(f"Starting frame cannot be greater or equal to ending frame!")
             return
@@ -487,8 +482,6 @@ class GeneratorWindow(QWidget):
 
         if self.end_frame != 0:
             self.frame_numbers = [fn for fn in self.frame_numbers if fn <= self.end_frame]
-
-        self.camera_order = self.camera_order[:self.row * self.column]
 
         for index, fn in enumerate(self.frame_numbers, start=1):
             if self.stop_generator:
@@ -573,7 +566,7 @@ class GeneratorWindow(QWidget):
         active_cameras = len(self.camera_order)
 
         self.video_width = min(active_cameras, max(self.columns[:self.row])) * self.image_width
-        video_rows = math.ceil(active_cameras / self.column)
+        video_rows = math.ceil(active_cameras / sum(self.columns[:self.row]))
         total = 0
         for i, count in enumerate(self.columns):
             total += count
