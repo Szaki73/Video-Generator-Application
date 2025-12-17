@@ -5,16 +5,15 @@ from PySide6.QtWidgets import (
 )
 from PySide6 import QtWidgets
 from PySide6.QtGui import QPixmap, QImage
-from PySide6.QtCore import Qt
-import sys
-import os
+from PySide6.QtCore import Qt, QTimer
+
 from clickable_label import ClickableLabel
 from default_spinbox import DefaultSpinBox
+
 import cv2 as cv
 import argparse
 import sys
 import os
-import cv2 as cv
 import numpy as np
 import math
 from concurrent.futures import ThreadPoolExecutor
@@ -39,15 +38,14 @@ logging.basicConfig(
 class GeneratorWindow(QWidget):
     def __init__(self):
         super().__init__()
-
-        self.lidar_path = ""
-        self.input_path = ""
+        self.input_entries = [] 
+        self.input_buttons = []
         self.inputs = []
         self.output_path = os.path.join(base_path, "output")
         os.makedirs(self.output_path, exist_ok=True)
         self.output_name = "output"
-        self.row = 3
-        self.columns = [3, 3, 3]
+        self.row = 4
+        self.columns = [4, 4, 4, 4]
         self.framerate = 15
         self.start_frame = 0
         self.end_frame = 0
@@ -73,25 +71,30 @@ class GeneratorWindow(QWidget):
 
         self.init_ui()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        QTimer.singleShot(0, self.update_grid)
+
     def init_ui(self):
         main_layout = QHBoxLayout(self)
 
         setup_panel = QVBoxLayout()
         setup_panel.setAlignment(Qt.AlignTop)
 
-        self.input_path_entry = QLineEdit()
-        browse_input_btn = QPushButton("Browse")
-        browse_input_btn.clicked.connect(self.browse_input)
+
+        for i in range(5):
+            line_edit = QLineEdit()
+            browse_btn = QPushButton("Browse")
+            browse_btn.clicked.connect(lambda _, le=line_edit: self.browse_input(le))
+
+            self.input_entries.append(line_edit)
+            self.input_buttons.append(browse_btn)
 
         self.output_path_entry = QLineEdit(self.output_path)
         browse_output_btn = QPushButton("Browse")
         browse_output_btn.clicked.connect(self.browse_output)
 
         self.output_name_entry = QLineEdit(self.output_name)
-
-        self.lidar_path_entry = QLineEdit()
-        browse_lidar_input_btn = QPushButton("Browse")
-        browse_lidar_input_btn.clicked.connect(self.browse_lidar_input)
 
         continue_btn = QPushButton("Continue")
         continue_btn.clicked.connect(self.loading_grid_view)
@@ -100,38 +103,47 @@ class GeneratorWindow(QWidget):
         stop_btn.clicked.connect(self.stop_gen)
 
         self.row_spin = QSpinBox()
-        self.row_spin.setRange(1, 3)
+        self.row_spin.setRange(1, 4)
         self.row_spin.setValue(self.row)
         self.row_spin.valueChanged.connect(self.update_row)
 
         self.col1_spin = QSpinBox()
-        self.col1_spin.setRange(1, 3)
+        self.col1_spin.setRange(1, 4)
         self.col1_spin.setValue(self.columns[0])
         self.col1_spin.valueChanged.connect(lambda val: self.update_column(0, val))
 
         self.col2_spin = QSpinBox()
-        self.col2_spin.setRange(1, 3)
+        self.col2_spin.setRange(1, 4)
         self.col2_spin.setValue(self.columns[1])
         self.col2_spin.valueChanged.connect(lambda val: self.update_column(1, val))
 
         self.col3_spin = QSpinBox()
-        self.col3_spin.setRange(1, 3)
+        self.col3_spin.setRange(1, 4)
         self.col3_spin.setValue(self.columns[2])
         self.col3_spin.valueChanged.connect(lambda val: self.update_column(2, val))
 
-        setup_panel.addWidget(QLabel("Input Path (required):"))
-        setup_panel.addWidget(self.input_path_entry)
-        setup_panel.addWidget(browse_input_btn)
-        setup_panel.addWidget(QLabel("Lidar Input Path"))
-        setup_panel.addWidget(self.lidar_path_entry)
-        setup_panel.addWidget(browse_lidar_input_btn)
+        self.col4_spin = QSpinBox()
+        self.col4_spin.setRange(1, 4)
+        self.col4_spin.setValue(self.columns[3])
+        self.col4_spin.valueChanged.connect(lambda val: self.update_column(3, val))
+
+        for line_edit, browse_btn in zip(self.input_entries, self.input_buttons):
+            setup_panel.addWidget(QLabel("Input Path:"))
+            row = QHBoxLayout()
+            row.addWidget(line_edit)
+            row.addWidget(browse_btn)
+            setup_panel.addLayout(row)
+
         setup_panel.addWidget(QLabel("Output Path:"))
         setup_panel.addWidget(self.output_path_entry)
         setup_panel.addWidget(browse_output_btn)
         setup_panel.addWidget(QLabel("Output Name:"))
         setup_panel.addWidget(self.output_name_entry)
+
+
         setup_panel.addWidget(continue_btn)
         setup_panel.addWidget(stop_btn)
+
         setup_panel.addWidget(QLabel("Row count:"))
         setup_panel.addWidget(self.row_spin)
         setup_panel.addWidget(QLabel("Columns in first row:"))
@@ -140,6 +152,8 @@ class GeneratorWindow(QWidget):
         setup_panel.addWidget(self.col2_spin)
         setup_panel.addWidget(QLabel("Columns in third row:"))
         setup_panel.addWidget(self.col3_spin)
+        setup_panel.addWidget(QLabel("Columns in fourth row:"))
+        setup_panel.addWidget(self.col4_spin)
 
         self.error_label = QLabel("")
         self.error_label.setStyleSheet("color: red; font-weight: bold;")
@@ -163,15 +177,10 @@ class GeneratorWindow(QWidget):
         stacked_frame.setLayout(self.stacked_layout)
         main_layout.addWidget(stacked_frame)
 
-    def browse_input(self):
+    def browse_input(self, line_edit):
         path = QFileDialog.getExistingDirectory(self, "Select Input Directory")
         if path:
-            self.input_path_entry.setText(path)
-
-    def browse_lidar_input(self):
-        path = QFileDialog.getExistingDirectory(self, "Select Lidar Input Directory")
-        if path:
-            self.lidar_path_entry.setText(path)
+            line_edit.setText(path)
 
     def browse_output(self):
         path = QFileDialog.getExistingDirectory(self, "Select Output Directory")
@@ -239,56 +248,50 @@ class GeneratorWindow(QWidget):
 
     def loading_grid_view(self):
         self.inputs.clear()
-        input_path = self.input_path_entry.text().strip()
-        lidar_path = self.lidar_path_entry.text().strip()
+        self.error_label.setText("")
+
+        input_paths = [le.text().strip() for le in self.input_entries]
+
+        input_paths = [p for p in input_paths if p]
+
         output_path = self.output_path_entry.text().strip()
         output_name = self.output_name_entry.text().strip()
 
-        self.error_label.setText("")
-
-        if not input_path:
-            self.error_label.setText("Input path is required.")
-            self.input_path_entry.setFocus()
+        if not input_paths:
+            self.error_label.setText("At least one input path is required.")
+            self.input_entries[0].setFocus()
             return
 
-        if not os.path.isdir(input_path):
-            self.error_label.setText(f"Input Path does not exist")
-            self.input_path_entry.setFocus()
-            return
-
-        if lidar_path and not os.path.isdir(lidar_path):
-            self.error_label.setText(f"Lidar Input Path does not exist")
-            self.lidar_path_entry.setFocus()
-            return
+        for idx, path in enumerate(input_paths):
+            if not os.path.isdir(path):
+                self.error_label.setText(f"Input path #{idx+1} does not exist.")
+                self.input_entries[idx].setFocus()
+                return
 
         if not os.path.isdir(output_path):
-            self.error_label.setText(f"Output Path does not exist")
+            self.error_label.setText("Output Path does not exist.")
             self.output_path_entry.setFocus()
             return
 
         if not output_name:
-            self.error_label.setText(f"Output Name can not be empty.")
+            self.error_label.setText("Output Name cannot be empty.")
             self.output_name_entry.setFocus()
             return
 
-        self.input_path = input_path
-        self.lidar_path = lidar_path
+        self.inputs = input_paths
         self.output_path = output_path
-
-        self.inputs.append(self.input_path)
-        if self.lidar_path:
-            self.inputs.append(self.lidar_path)
-
         self.output_name = output_name
 
         self.load_frames()
         self.get_image_sizes()
         self.update_grid()
 
+
     def stop_gen(self):
         self.stop_generator = True
 
     def update_grid(self):
+        print(self.grid_scroll.viewport().height(), self.grid_scroll.viewport().width())
         self.camera_grid = []
         self.camera_positions = {}
         for i in reversed(range(self.grid_layout.count())):
@@ -296,9 +299,13 @@ class GeneratorWindow(QWidget):
             if widget:
                 widget.setParent(None)
 
-        available_width = self.grid_scroll.viewport().width() * 0.9
-        cell_width = available_width // 3
-        cell_height = int(cell_width / self.image_width * self.image_height)
+        # available_width = self.grid_scroll.viewport().width() * 0.9
+        # cell_width = available_width // 4
+        # cell_height = int(cell_width / self.image_width * self.image_height)
+
+        available_height = self.grid_scroll.viewport().height() * 0.9
+        cell_height = available_height // 4
+        cell_width = int((cell_height / self.image_height) * self.image_width)
 
         cam_index = 0
 

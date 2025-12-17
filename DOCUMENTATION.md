@@ -30,17 +30,17 @@ logging.basicConfig(
     level=logging.ERROR
 )`
 
-This i for logging errors in the error.txt.
+This is for logging errors in the error.txt.
 
 ### Fields
 
-- self.lidar_path = "": holds the Lidar Input Path
-- self.input_path = "": Holds the Input Path
+- self.input_entries = []: Holds the inputs text fields.
+- self.input_buttons = []: Holds the browse buttons for the inputs.
 - self.inputs = []: Holds all of the input path.
 - self.output_path = os.path.join(base_path, "output"): Holds the output path, on default it points to the output folder.
 - self.output_name = "output": The output video name: on default it is `output`
-- self.row = 3: number of rows in the gird, 3 on default.
-- self.columns = [3, 3, 3]: number of column for each row in the gird, each is 3 on default.
+- self.row = 4: number of rows in the gird, 3 on default.
+- self.columns = [4, 4, 4, 4]: number of column for each row in the gird, each is 3 on default.
 - self.framerate = 15: the video framerate, 15 on default.
 - self.start_frame = 0: start frame of the video, it is 0 on default which means the first frame.
 - self.end_frame = 0: end frame of the video, it is 0 on default which means the last frame.
@@ -66,6 +66,7 @@ This i for logging errors in the error.txt.
 
 ### Methods
 
+- showEvent(self, event): this is for showing the grid properly at the start of the app.
 - def init_ui(self): initializes the whole window.
 - def browse_input(self): browsing the input path.
 - def browse_lidar_input(self): browsing the lidar input path.
